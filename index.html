@@ -3,9 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Investment Triage — Human Review</title>
+<title>Investment Triage — APBAI Review</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<!-- Google Identity Services — calls initGoogleAuth() once loaded -->
+<script src="https://accounts.google.com/gsi/client" onload="initGoogleAuth()" async defer></script>
 <style>
 /* ── Reset & tokens (mirrors aptradeinvest palette) ──────────────────────── */
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -59,9 +61,7 @@ body {
   gap: 16px;
 }
 
-.hdr-brand {
-  flex-shrink: 0;
-}
+.hdr-brand { flex-shrink: 0; }
 
 .hdr-brand h1 {
   font-size: 16px;
@@ -78,68 +78,76 @@ body {
   margin-top: 1px;
 }
 
-/* ── Token bar ───────────────────────────────────────────────────────────── */
-.token-bar {
+/* ── Auth bar ────────────────────────────────────────────────────────────── */
+.auth-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1;
-  max-width: 560px;
+  gap: 10px;
   margin-left: auto;
 }
 
-.token-bar label {
-  font-size: 11px;
-  color: #7a9ec4;
+/* Signed-out state */
+#authSignedOut { display: flex; align-items: center; }
+
+.btn-google-signin {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--rs);
+  border: 1px solid #3a5068;
+  background: #1a2e42;
+  color: #c0cdd9;
+  font-family: var(--font-b);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: background .12s, border-color .12s;
   white-space: nowrap;
-  letter-spacing: .04em;
+}
+
+.btn-google-signin:hover { background: #22394f; border-color: #4a7fc4; }
+
+.btn-google-signin svg { flex-shrink: 0; }
+
+/* Signed-in state */
+#authSignedIn {
+  display: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-user {
+  font-size: 12px;
+  color: #c0cdd9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auth-user-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
   flex-shrink: 0;
 }
 
-.token-bar input {
-  flex: 1;
-  height: 30px;
+.btn-signout {
+  height: 26px;
   padding: 0 10px;
   border-radius: var(--rs);
   border: 1px solid #2a3f56;
-  background: #1a2e42;
-  color: #c0cdd9;
-  font-family: var(--font-m);
-  font-size: 11px;
-  outline: none;
-  min-width: 0;
-}
-
-.token-bar input::placeholder { color: #4a6078; }
-
-.token-bar input:focus { border-color: #4a7fc4; }
-
-.btn-save {
-  height: 30px;
-  padding: 0 12px;
-  border-radius: var(--rs);
-  border: none;
-  background: #1655a2;
-  color: #fff;
+  background: transparent;
+  color: #7a9ec4;
   font-family: var(--font-b);
   font-size: 11px;
-  font-weight: 500;
   cursor: pointer;
-  white-space: nowrap;
-  transition: background .12s;
-  flex-shrink: 0;
+  transition: border-color .12s, color .12s;
 }
 
-.btn-save:hover { background: #1d6bc4; }
-
-.token-status {
-  font-size: 11px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.token-status.ok   { color: #4ade80; }
-.token-status.none { color: #f87171; }
+.btn-signout:hover { border-color: #4a7fc4; color: #c0cdd9; }
 
 /* ── Run date banner ────────────────────────────────────────────────────── */
 .run-banner {
@@ -158,8 +166,7 @@ body {
 .run-banner strong { color: var(--text); font-weight: 500; }
 
 .run-banner .run-counts { display: flex; gap: 12px; margin-left: auto; }
-
-.run-banner .run-count { color: var(--muted); }
+.run-banner .run-count  { color: var(--muted); }
 .run-banner .run-count b { color: var(--text); }
 
 #runDateLoading { color: var(--hint); font-style: italic; }
@@ -205,10 +212,10 @@ body {
   text-transform: uppercase;
 }
 
-.col-title.scraped   { color: var(--hint); }
-.col-title.review    { color: #1655a2; }
-.col-title.approved  { color: #1a6b3c; }
-.col-title.skipped   { color: #8a5a0a; }
+.col-title.scraped  { color: var(--hint); }
+.col-title.review   { color: #1655a2; }
+.col-title.approved { color: #1a6b3c; }
+.col-title.skipped  { color: #8a5a0a; }
 
 .col-count {
   font-size: 11px;
@@ -296,7 +303,7 @@ body {
 
 .badge-add         { background: var(--info-bg); color: var(--info-txt); }
 .badge-investigate { background: var(--warn-bg); color: var(--warn-txt); }
-.badge-skip        { background: var(--bg);      color: var(--hint);     border: 1px solid var(--border); }
+.badge-skip        { background: var(--bg);      color: var(--hint); border: 1px solid var(--border); }
 
 /* card meta */
 .kcard-meta {
@@ -326,10 +333,10 @@ body {
   padding: 1px 6px;
 }
 
-.conf-high   { background: var(--succ-bg); color: var(--succ-txt); }
-.conf-medium { background: var(--warn-bg); color: var(--warn-txt); }
-.conf-low    { background: var(--dang-bg); color: var(--dang-txt); }
-.conf-unknown{ background: var(--bg);      color: var(--hint); border: 1px solid var(--border); }
+.conf-high    { background: var(--succ-bg); color: var(--succ-txt); }
+.conf-medium  { background: var(--warn-bg); color: var(--warn-txt); }
+.conf-low     { background: var(--dang-bg); color: var(--dang-txt); }
+.conf-unknown { background: var(--bg);      color: var(--hint); border: 1px solid var(--border); }
 
 /* reasoning toggle */
 .kcard-reasoning-toggle {
@@ -439,15 +446,8 @@ body {
   border-color: #c57c1a;
 }
 
-.btn-action:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-}
-
-.btn-action.loading {
-  opacity: .6;
-  cursor: wait;
-}
+.btn-action:disabled { opacity: .5; cursor: not-allowed; }
+.btn-action.loading  { opacity: .6; cursor: wait; }
 
 /* inline error on action */
 .kcard-err {
@@ -494,13 +494,13 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  max-width: 400px;
+  max-width: 420px;
   text-align: center;
 }
 
-.overlay-error-icon { font-size: 28px; }
+.overlay-error-icon  { font-size: 28px; }
 .overlay-error-title { font-size: 16px; font-weight: 600; color: var(--text); }
-.overlay-error-msg { font-size: 13px; color: var(--muted); line-height: 1.55; }
+.overlay-error-msg   { font-size: 13px; color: var(--muted); line-height: 1.55; }
 
 .btn-retry {
   margin-top: 4px;
@@ -517,19 +517,6 @@ body {
 }
 
 .btn-retry:hover { background: #1d6bc4; }
-
-/* ── No-token notice ─────────────────────────────────────────────────────── */
-.no-token-notice {
-  font-size: 11px;
-  color: var(--warn-txt);
-  background: var(--warn-bg);
-  border: 1px solid #f0d48a;
-  border-radius: var(--rs);
-  padding: 5px 8px;
-  display: none;
-}
-
-.no-token-notice.visible { display: block; }
 </style>
 </head>
 <body>
@@ -540,11 +527,30 @@ body {
     <h1>Investment Triage</h1>
     <p>APBAI — Review Tool</p>
   </div>
-  <div class="token-bar">
-    <label for="tokenInput">GitHub PAT</label>
-    <input type="password" id="tokenInput" placeholder="ghp_…" autocomplete="off" spellcheck="false">
-    <button class="btn-save" onclick="saveToken()">Save</button>
-    <span class="token-status" id="tokenStatus"></span>
+
+  <div class="auth-bar">
+    <!-- Signed-out state -->
+    <div id="authSignedOut">
+      <button class="btn-google-signin" onclick="signIn()">
+        <!-- Google "G" mark -->
+        <svg width="14" height="14" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+          <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.909-2.259c-.805.54-1.836.86-3.047.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+          <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+        </svg>
+        Sign in with Google
+      </button>
+    </div>
+
+    <!-- Signed-in state -->
+    <div id="authSignedIn">
+      <div class="auth-user">
+        <span class="auth-user-dot"></span>
+        <span id="authUserName"></span>
+      </div>
+      <button class="btn-signout" onclick="signOut()">Sign out</button>
+    </div>
   </div>
 </header>
 
@@ -561,7 +567,7 @@ body {
 </div>
 
 <!-- ── Board ─────────────────────────────────────────────────────────── -->
-<div class="board" id="board">
+<div class="board">
 
   <div class="col">
     <div class="col-hdr">
@@ -591,7 +597,7 @@ body {
         <span class="col-title approved">Approved</span>
         <span class="col-count" id="cnt-approved">0</span>
       </div>
-      <div class="col-desc">Issue created in aptradeinvest this session</div>
+      <div class="col-desc">Written to investment_events this session</div>
     </div>
     <div class="col-body" id="col-approved"></div>
   </div>
@@ -602,7 +608,7 @@ body {
         <span class="col-title skipped">Skipped</span>
         <span class="col-count" id="cnt-skipped">0</span>
       </div>
-      <div class="col-desc">Dismissed this session — no issue created</div>
+      <div class="col-desc">Dismissed this session — no write</div>
     </div>
     <div class="col-body" id="col-skipped"></div>
   </div>
@@ -616,52 +622,124 @@ body {
 </div>
 
 <script>
-/* ── Configuration ───────────────────────────────────────────────────────
-   STAGING_GID: Replace with the gid of the "staging" tab once you create
-   it in the Google Sheet and publish it to CSV. To find the gid: open the
-   sheet, click the staging tab, and read the gid=XXXXXXX from the URL.
-   ────────────────────────────────────────────────────────────────────── */
-var SHEET_PUBLISHED_ID = '2PACX-1vS-s3m8pLsJvLN-NaLFS8a6fWIzk2Pm2m7-RQJK7obDmgtYKPLI6EnsrpBlQz6meJf0RES80I2vbz7R';
-var STAGING_GID        = '1658448723'; // <-- set this
+/* ════════════════════════════════════════════════════════════════════════
+   CONFIGURATION
+   ════════════════════════════════════════════════════════════════════════
 
-var GITHUB_OWNER = 'VietJyacTruong-Ho';
-var GITHUB_REPO  = 'aptradeinvest';
+   GOOGLE_CLIENT_ID
+     Create at: Google Cloud Console → APIs & Services → Credentials →
+     Create Credentials → OAuth 2.0 Client ID → Application type: Web app.
+     Add your GitHub Pages URL (e.g. https://vietjyactruong-ho.github.io)
+     as an Authorised JavaScript Origin. Do NOT add a trailing slash.
+     Required APIs: Google Sheets API (enable in APIs & Services → Library).
 
-/* ── Token handling ──────────────────────────────────────────────────── */
-function getToken() {
-  return sessionStorage.getItem('apbai_pat') || '';
+   SHEET_ID
+     The actual spreadsheet ID — found in the edit URL:
+     https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit
+     This is different from the published CSV ID used for staging reads.
+
+   STAGING_GID
+     The gid query parameter for the staging tab's published CSV URL.
+     Find it by opening the sheet, clicking the staging tab, and reading
+     gid=XXXXXXX from the URL bar.
+   ════════════════════════════════════════════════════════════════════════ */
+var GOOGLE_CLIENT_ID    = 'REPLACE_WITH_OAUTH_CLIENT_ID';
+var SHEET_ID            = 'REPLACE_WITH_SPREADSHEET_ID';
+var SHEET_PUBLISHED_ID  = '2PACX-1vS-s3m8pLsJvLN-NaLFS8a6fWIzk2Pm2m7-RQJK7obDmgtYKPLI6EnsrpBlQz6meJf0RES80I2vbz7R';
+var STAGING_GID         = '1658448723';
+
+/* investment_events tab name exactly as it appears in the Sheet */
+var EVENTS_TAB = 'investment_events';
+
+/* ════════════════════════════════════════════════════════════════════════
+   AUTH — Google Identity Services (token flow)
+   ════════════════════════════════════════════════════════════════════════ */
+var tokenClient  = null;
+var accessToken  = '';
+
+function initGoogleAuth() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/userinfo.profile'
+    ].join(' '),
+    callback: function(response) {
+      if (response.error) {
+        console.error('OAuth error:', response.error);
+        return;
+      }
+      accessToken = response.access_token;
+      sessionStorage.setItem('apbai_gtoken', accessToken);
+      fetchUserInfo(accessToken);
+    }
+  });
+
+  /* Attempt to restore a token from this session */
+  var saved = sessionStorage.getItem('apbai_gtoken');
+  if (saved) {
+    accessToken = saved;
+    fetchUserInfo(accessToken);
+  }
 }
 
-function saveToken() {
-  var val = document.getElementById('tokenInput').value.trim();
-  if (!val) {
-    setTokenStatus('none', 'No token entered');
+function signIn() {
+  if (!tokenClient) {
+    /* GIS library not yet loaded — shouldn't happen in practice */
+    alert('Google sign-in is still loading. Please wait a moment and try again.');
     return;
   }
-  sessionStorage.setItem('apbai_pat', val);
-  document.getElementById('tokenInput').value = '';
-  setTokenStatus('ok', 'Token saved (session)');
+  /* prompt: '' lets GIS reuse consent silently if already granted;
+     first-time users will see the account picker + consent screen */
+  tokenClient.requestAccessToken({ prompt: '' });
 }
 
-function setTokenStatus(cls, msg) {
-  var el = document.getElementById('tokenStatus');
-  el.textContent = msg;
-  el.className = 'token-status ' + cls;
-}
-
-// Restore visual token status on page load
-(function initTokenStatus() {
-  if (getToken()) {
-    setTokenStatus('ok', 'Token loaded');
-  } else {
-    setTokenStatus('none', 'No token — actions will fail');
+function signOut() {
+  if (accessToken) {
+    google.accounts.oauth2.revoke(accessToken, function() {});
   }
-})();
+  accessToken = '';
+  sessionStorage.removeItem('apbai_gtoken');
+  setAuthUI(false, '');
+}
 
-/* ── State ───────────────────────────────────────────────────────────── */
-var cards = {}; // id -> card object
+function fetchUserInfo(token) {
+  fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(function(res) {
+    if (res.status === 401) {
+      /* Token expired — clear it, show sign-in */
+      accessToken = '';
+      sessionStorage.removeItem('apbai_gtoken');
+      setAuthUI(false, '');
+      return;
+    }
+    return res.json();
+  })
+  .then(function(data) {
+    if (data && data.name) setAuthUI(true, data.name);
+  })
+  .catch(function() {
+    sessionStorage.removeItem('apbai_gtoken');
+    setAuthUI(false, '');
+  });
+}
 
-/* ── Data fetch ──────────────────────────────────────────────────────── */
+function setAuthUI(signedIn, name) {
+  document.getElementById('authSignedOut').style.display = signedIn ? 'none' : 'flex';
+  document.getElementById('authSignedIn').style.display  = signedIn ? 'flex' : 'none';
+  if (signedIn) document.getElementById('authUserName').textContent = name;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════════════════════════════════ */
+var cards = {}; /* id -> row object */
+
+/* ════════════════════════════════════════════════════════════════════════
+   STAGING DATA FETCH (PapaParse, same pattern as aptradeinvest)
+   ════════════════════════════════════════════════════════════════════════ */
 function stagingUrl() {
   return 'https://docs.google.com/spreadsheets/d/e/' +
     SHEET_PUBLISHED_ID +
@@ -671,9 +749,9 @@ function stagingUrl() {
 function loadStaging() {
   showOverlay();
   Papa.parse(stagingUrl(), {
-    download:      true,
-    header:        true,
-    dynamicTyping: false,
+    download:       true,
+    header:         true,
+    dynamicTyping:  false,
     skipEmptyLines: true,
     complete: function(results) {
       hideOverlay();
@@ -688,16 +766,18 @@ function loadStaging() {
       hideOverlay();
       var msg = err && err.message ? err.message : 'CSV fetch failed.';
       if (STAGING_GID === 'REPLACE_WITH_STAGING_TAB_GID') {
-        msg = 'STAGING_GID has not been configured. Open index.html and set STAGING_GID to the gid of your staging tab.';
+        msg = 'STAGING_GID has not been set. Open index.html, set STAGING_GID to the gid of your staging tab, and redeploy.';
       }
       showError(msg);
     }
   });
 }
 
-/* ── Row processing ──────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   ROW PROCESSING
+   ════════════════════════════════════════════════════════════════════════ */
 function processRows(rows) {
-  // Find the latest run_date
+  /* Filter to the latest run_date */
   var dates = rows
     .map(function(r) { return (r.run_date || '').trim(); })
     .filter(Boolean)
@@ -712,15 +792,13 @@ function processRows(rows) {
     return (r.run_date || '').trim() === latestDate;
   });
 
-  // Assign stable IDs
-  filtered.forEach(function(r, i) {
-    r._id = 'card-' + i;
-  });
+  /* Assign stable IDs */
+  filtered.forEach(function(r, i) { r._id = 'card-' + i; });
 
-  // Render banner
+  /* Update banner */
   document.getElementById('runDateLoading').style.display = 'none';
   document.getElementById('runDateInfo').style.display    = 'inline';
-  document.getElementById('runDateVal').textContent        = latestDate;
+  document.getElementById('runDateVal').textContent       = latestDate;
 
   var reviewCount = filtered.filter(function(r) {
     var a = (r.claude_action || '').trim().toUpperCase();
@@ -734,20 +812,23 @@ function processRows(rows) {
   document.getElementById('countReview').textContent  = reviewCount;
   document.getElementById('countScraped').textContent = scrapedCount;
 
-  // Render columns
   renderAll(filtered);
 }
 
-/* ── Render ──────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   RENDER
+   ════════════════════════════════════════════════════════════════════════ */
 function renderAll(rows) {
-  var scraped  = rows.filter(function(r) { return (r.claude_action || '').trim().toUpperCase() === 'SKIP'; });
-  var review   = rows.filter(function(r) {
+  var scraped = rows.filter(function(r) {
+    return (r.claude_action || '').trim().toUpperCase() === 'SKIP';
+  });
+  var review = rows.filter(function(r) {
     var a = (r.claude_action || '').trim().toUpperCase();
     return a === 'ADD' || a === 'INVESTIGATE';
   });
 
-  renderColumn('col-scraped',  scraped, 'scraped');
-  renderColumn('col-review',   review,  'review');
+  renderColumn('col-scraped', scraped, 'scraped');
+  renderColumn('col-review',  review,  'review');
 
   updateCount('cnt-scraped',  scraped.length);
   updateCount('cnt-review',   review.length);
@@ -773,22 +854,20 @@ function renderColumn(colId, rows, mode) {
     return;
   }
 
-  rows.forEach(function(row) {
-    col.appendChild(buildCard(row, mode));
-  });
+  rows.forEach(function(row) { col.appendChild(buildCard(row, mode)); });
 }
 
 function buildCard(row, mode) {
   var action  = (row.claude_action || '').trim().toUpperCase();
   var conf    = (row.confidence    || '').trim().toLowerCase();
-  var company = row.company        || '(unnamed)';
+  var company = row.company_name   || '(unnamed)';
   var country = row.parent_country || '';
   var city    = row.city           || '';
   var sector  = row.sector         || '';
   var value   = row.announced_value_usd_m ? row.announced_value_usd_m.trim() : '';
-  var invType = row.investment_type  || '';
-  var reason  = row.reasoning        || '';
-  var srcUrl  = row.source_url       || '';
+  var invType = row.investment_type || '';
+  var reason  = row.reasoning      || '';
+  var srcUrl  = row.source_url     || '';
   var id      = row._id;
 
   var card = document.createElement('div');
@@ -798,9 +877,8 @@ function buildCard(row, mode) {
     (mode === 'skipped'  ? ' is-skipped'  : '');
   card.id = 'kcard-' + id;
 
-  // top row: company + action badge
-  var actionBadgeCls = action === 'ADD' ? 'badge-add'
-                     : action === 'INVESTIGATE' ? 'badge-investigate'
+  var actionBadgeCls = action === 'ADD'         ? 'badge-add'
+                     : action === 'INVESTIGATE'  ? 'badge-investigate'
                      : 'badge-skip';
 
   var topHtml =
@@ -809,26 +887,20 @@ function buildCard(row, mode) {
       '<span class="kcard-action-badge ' + actionBadgeCls + '">' + action + '</span>' +
     '</div>';
 
-  // meta row
   var metaItems = [];
   if (country) metaItems.push('<span>' + esc(country) + (city ? ', ' + esc(city) : '') + '</span>');
   if (sector)  metaItems.push('<span>' + esc(sector) + '</span>');
   if (invType) metaItems.push('<span>' + esc(invType) + '</span>');
   if (value)   metaItems.push('<span>$<span class="meta-val">' + esc(value) + '</span>M</span>');
 
-  var confCls = conf === 'high' ? 'conf-high'
+  var confCls = conf === 'high'   ? 'conf-high'
               : conf === 'medium' ? 'conf-medium'
               : conf === 'low'    ? 'conf-low'
               : 'conf-unknown';
   var confBadge = '<span class="conf-badge ' + confCls + '">' + esc(conf || 'unknown') + '</span>';
 
-  var metaHtml =
-    '<div class="kcard-meta">' +
-      metaItems.join('') +
-      confBadge +
-    '</div>';
+  var metaHtml = '<div class="kcard-meta">' + metaItems.join('') + confBadge + '</div>';
 
-  // reasoning toggle (collapsed by default)
   var reasonHtml = '';
   if (reason) {
     reasonHtml =
@@ -838,7 +910,6 @@ function buildCard(row, mode) {
       '<div class="kcard-reasoning">' + esc(reason) + '</div>';
   }
 
-  // source
   var sourceHtml = '';
   if (srcUrl) {
     sourceHtml =
@@ -847,16 +918,15 @@ function buildCard(row, mode) {
       '</div>';
   }
 
-  // action buttons (only for review mode)
   var actionsHtml = '';
-  var errHtml = '';
+  var errHtml     = '';
   if (mode === 'review') {
     var investigateBtn = action === 'INVESTIGATE'
-      ? '<button class="btn-action btn-investigate" onclick="doInvestigate(\'' + id + '\')" title="Create issue with \'investigate\' label">Investigate</button>'
+      ? '<button class="btn-action btn-investigate" onclick="doInvestigate(\'' + id + '\')" title="Flag for manual follow-up — no sheet write">Investigate</button>'
       : '';
     actionsHtml =
       '<div class="kcard-actions">' +
-        '<button class="btn-action btn-approve" onclick="doApprove(\'' + id + '\')" title="Create issue with \'approved\' label">Approve</button>' +
+        '<button class="btn-action btn-approve" onclick="doApprove(\'' + id + '\')" title="Append row to investment_events">Approve</button>' +
         investigateBtn +
         '<button class="btn-action btn-skip" onclick="doSkip(\'' + id + '\')">Skip</button>' +
       '</div>';
@@ -864,129 +934,121 @@ function buildCard(row, mode) {
   }
 
   card.innerHTML = topHtml + metaHtml + reasonHtml + sourceHtml + actionsHtml + errHtml;
-
-  // Store row data keyed by id for API calls
   cards[id] = row;
-
   return card;
 }
 
-/* ── Toggle reasoning ────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   TOGGLE REASONING
+   ════════════════════════════════════════════════════════════════════════ */
 function toggleReasoning(btn) {
   var isOpen = btn.classList.toggle('open');
   var panel  = btn.nextElementSibling;
   if (panel) panel.classList.toggle('open', isOpen);
 }
 
-/* ── Actions ─────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   ACTIONS
+   ════════════════════════════════════════════════════════════════════════ */
 function doApprove(id) {
   var row = cards[id];
   if (!row) return;
-  createIssue(id, row, 'approved');
-}
 
-function doInvestigate(id) {
-  var row = cards[id];
-  if (!row) return;
-  createIssue(id, row, 'investigate');
-}
-
-function doSkip(id) {
-  moveCard(id, 'skipped');
-}
-
-/* ── GitHub Issues API ───────────────────────────────────────────────── */
-function createIssue(id, row, label) {
-  var token = getToken();
-  if (!token) {
-    showCardError(id, 'No GitHub PAT saved. Paste your token above and click Save.');
+  if (!accessToken) {
+    showCardError(id, 'Not signed in. Click "Sign in with Google" in the header.');
     return;
   }
 
   setCardLoading(id, true);
   clearCardError(id);
 
-  var title = '[TRIAGE] ' + (row.company || '(unnamed)') + ' \u2014 ' + (row.parent_country || 'Unknown');
-  var body  = buildIssueBody(row, label);
+  appendToSheet(row)
+    .then(function(res) {
+      if (!res.ok) {
+        return res.json().then(function(data) {
+          var msg = data.error && data.error.message
+            ? data.error.message
+            : 'HTTP ' + res.status;
+          throw new Error('Sheets API: ' + msg);
+        });
+      }
+      setCardLoading(id, false);
+      moveCard(id, 'approved');
+    })
+    .catch(function(err) {
+      setCardLoading(id, false);
+      showCardError(id, err.message || 'Failed to write to sheet. Check token and sheet permissions.');
+    });
+}
 
-  fetch('https://api.github.com/repos/' + GITHUB_OWNER + '/' + GITHUB_REPO + '/issues', {
-    method: 'POST',
+function doInvestigate(id) {
+  /* Behaviour TBD — visual move only, no sheet write */
+  moveCard(id, 'approved', 'investigate');
+}
+
+function doSkip(id) {
+  moveCard(id, 'skipped');
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   GOOGLE SHEETS API — values.append
+
+   Staging columns (post-update):
+   run_date | claude_action | reasoning | company_name | parent_country |
+   city | county | sector | investment_type | announced_value_usd_m |
+   jobs | announcement_year | operational_status | confidence | source_url | notes
+
+   investment_events column order (target):
+   company_name | parent_country | city | county | sector | investment_type |
+   announced_value_usd_m | jobs | announcement_year | operational_status |
+   confidence | source_url | notes | data_source
+
+   All fields now map directly. `reasoning` is Claude's internal chain-of-thought
+   shown on cards but not written to investment_events. `notes` is the human-
+   readable notes field and maps straight through.
+   ════════════════════════════════════════════════════════════════════════ */
+function appendToSheet(row) {
+  var values = [[
+    row.company_name          || '',  /* company_name          */
+    row.parent_country        || '',  /* parent_country        */
+    row.city                  || '',  /* city                  */
+    row.county                || '',  /* county                */
+    row.sector                || '',  /* sector                */
+    row.investment_type       || '',  /* investment_type       */
+    row.announced_value_usd_m || '',  /* announced_value_usd_m */
+    row.jobs                  || '',  /* jobs                  */
+    row.announcement_year     || '',  /* announcement_year     */
+    row.operational_status    || '',  /* operational_status    */
+    row.confidence            || '',  /* confidence            */
+    row.source_url            || '',  /* source_url            */
+    row.notes                 || '',  /* notes                 */
+    'triage'                          /* data_source           */
+  ]];
+
+  var range = encodeURIComponent(EVENTS_TAB);
+  var url   = 'https://sheets.googleapis.com/v4/spreadsheets/' +
+              SHEET_ID + '/values/' + range + ':append' +
+              '?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
+
+  return fetch(url, {
+    method:  'POST',
     headers: {
-      'Authorization': 'Bearer ' + token,
-      'Accept':        'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
+      'Authorization': 'Bearer ' + accessToken,
       'Content-Type':  'application/json'
     },
-    body: JSON.stringify({
-      title:  title,
-      body:   body,
-      labels: [label]
-    })
-  })
-  .then(function(res) {
-    if (!res.ok) {
-      return res.json().then(function(data) {
-        throw new Error('GitHub API ' + res.status + ': ' + (data.message || res.statusText));
-      });
-    }
-    return res.json();
-  })
-  .then(function(issue) {
-    setCardLoading(id, false);
-    moveCard(id, 'approved', issue.html_url, label);
-  })
-  .catch(function(err) {
-    setCardLoading(id, false);
-    showCardError(id, err.message || 'Issue creation failed. Check token scope and try again.');
+    body: JSON.stringify({ values: values })
   });
 }
 
-/* ── Issue body builder ──────────────────────────────────────────────── */
-function buildIssueBody(row, label) {
-  // Maps staging tab columns to investment_events schema.
-  // Fields absent from staging are written as null.
-  var v = row.announced_value_usd_m ? row.announced_value_usd_m.trim() : null;
-  var lines = [
-    '<!-- Structured block parsed by Routine 2 — do not reformat -->',
-    '',
-    'company_name: '         + fmt(row.company),
-    'parent_country: '       + fmt(row.parent_country),
-    'city: '                 + fmt(row.city),
-    'county: null',
-    'sector: '               + fmt(row.sector),
-    'investment_type: '      + fmt(row.investment_type),
-    'announced_value_usd_m: '+ (v ? v : 'null'),
-    'jobs: null',
-    'announcement_year: null',
-    'operational_status: null',
-    'confidence: '           + fmt(row.confidence),
-    'source_url: '           + fmt(row.source_url),
-    'notes: '                + fmt(row.reasoning),
-    'data_source: routine1',
-    '',
-    '---',
-    '',
-    'run_date: '             + fmt(row.run_date),
-    'claude_action: '        + fmt(row.claude_action),
-    'triage_label: '         + label,
-  ];
-  return lines.join('\n');
-}
-
-function fmt(val) {
-  if (val === undefined || val === null || String(val).trim() === '') return 'null';
-  return String(val).trim();
-}
-
-/* ── Card state helpers ───────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   CARD STATE HELPERS
+   ════════════════════════════════════════════════════════════════════════ */
 function setCardLoading(id, loading) {
   var card = document.getElementById('kcard-' + id);
   if (!card) return;
-  var btns = card.querySelectorAll('.btn-action');
-  btns.forEach(function(b) {
+  card.querySelectorAll('.btn-action').forEach(function(b) {
     b.disabled = loading;
-    if (loading) b.classList.add('loading');
-    else b.classList.remove('loading');
+    b.classList.toggle('loading', loading);
   });
 }
 
@@ -1002,46 +1064,42 @@ function clearCardError(id) {
   if (el) { el.textContent = ''; el.classList.remove('visible'); }
 }
 
-function moveCard(id, dest, issueUrl, label) {
-  // Remove original card element
+function moveCard(id, dest, hint) {
   var orig = document.getElementById('kcard-' + id);
   if (orig) orig.remove();
 
-  // Rebuild card for destination column
-  var row  = cards[id];
-  var mode = dest; // 'approved' or 'skipped'
-  var newCard = buildCard(row, mode);
+  var row     = cards[id];
+  var newCard = buildCard(row, dest);
 
-  // For approved cards: add issue link
-  if (dest === 'approved' && issueUrl) {
-    var linkRow = document.createElement('div');
-    linkRow.className = 'kcard-source';
-    var lbl = label === 'investigate' ? 'Investigate' : 'Approved';
-    linkRow.innerHTML = '✓ ' + lbl + ' &middot; <a href="' + esc(issueUrl) + '" target="_blank" rel="noopener">View Issue</a>';
-    newCard.appendChild(linkRow);
+  /* Append a status note for approved/investigated cards */
+  if (dest === 'approved') {
+    var note = document.createElement('div');
+    note.className = 'kcard-source';
+    note.innerHTML = hint === 'investigate'
+      ? '&#128269; Flagged for investigation — no sheet write'
+      : '&#10003; Written to investment_events';
+    newCard.appendChild(note);
   }
 
   var destCol = document.getElementById('col-' + dest);
-  // Remove empty state if present
-  var empty = destCol.querySelector('.col-empty');
+  var empty   = destCol.querySelector('.col-empty');
   if (empty) empty.remove();
-
   destCol.insertBefore(newCard, destCol.firstChild);
 
-  // Update column counts
   recountColumns();
 }
 
 function recountColumns() {
-  var colIds = ['scraped', 'review', 'approved', 'skipped'];
-  colIds.forEach(function(c) {
+  ['scraped', 'review', 'approved', 'skipped'].forEach(function(c) {
     var col   = document.getElementById('col-' + c);
     var count = col ? col.querySelectorAll('.kcard').length : 0;
     updateCount('cnt-' + c, count);
   });
 }
 
-/* ── Overlay helpers ──────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   OVERLAY HELPERS
+   ════════════════════════════════════════════════════════════════════════ */
 function showOverlay() {
   document.getElementById('loadOverlay').className = 'board-overlay';
 }
@@ -1062,7 +1120,9 @@ function showError(msg) {
     '</div>';
 }
 
-/* ── Utility ─────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   UTILITY
+   ════════════════════════════════════════════════════════════════════════ */
 function esc(str) {
   if (!str) return '';
   return String(str)
@@ -1072,7 +1132,9 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-/* ── Boot ────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   BOOT
+   ════════════════════════════════════════════════════════════════════════ */
 loadStaging();
 </script>
 </body>
