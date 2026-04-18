@@ -8,6 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <!-- Google Identity Services — calls initGoogleAuth() once loaded -->
 <script src="https://accounts.google.com/gsi/client" onload="initGoogleAuth()" async defer></script>
+<!-- Google API client — provides gapi.load() for the Picker -->
+<script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
 /* ── Reset & tokens (mirrors aptradeinvest palette) ──────────────────────── */
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -133,6 +135,22 @@ body {
   background: #4ade80;
   flex-shrink: 0;
 }
+
+.btn-change-sheet {
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #7a9ec4;
+  font-family: var(--font-b);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color .12s;
+}
+
+.btn-change-sheet:hover { color: #c0cdd9; }
 
 .btn-signout {
   height: 26px;
@@ -549,6 +567,7 @@ body {
         <span class="auth-user-dot"></span>
         <span id="authUserName"></span>
       </div>
+      <button class="btn-change-sheet" onclick="changeSheet()" title="Select a different spreadsheet">Change sheet</button>
       <button class="btn-signout" onclick="signOut()">Sign out</button>
     </div>
   </div>
@@ -631,20 +650,25 @@ body {
      Create Credentials → OAuth 2.0 Client ID → Application type: Web app.
      Add your GitHub Pages URL (e.g. https://vietjyactruong-ho.github.io)
      as an Authorised JavaScript Origin. Do NOT add a trailing slash.
-     Required APIs: Google Sheets API (enable in APIs & Services → Library).
+     Enable in APIs & Services → Library: Google Sheets API, Google Drive API,
+     Google Picker API.
 
-   SHEET_ID
-     The actual spreadsheet ID — found in the edit URL:
-     https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit
-     This is different from the published CSV ID used for staging reads.
+   GOOGLE_API_KEY
+     Create at: Google Cloud Console → APIs & Services → Credentials →
+     Create Credentials → API key. Restrict it to the Picker API and your
+     GitHub Pages origin. This is a public key — safe to embed.
 
    STAGING_GID
      The gid query parameter for the staging tab's published CSV URL.
      Find it by opening the sheet, clicking the staging tab, and reading
      gid=XXXXXXX from the URL bar.
+
+   SHEET_ID is no longer a constant — the target spreadsheet is selected via
+   the Google Picker on first sign-in and stored in sessionStorage as
+   apbai_sheet_id. Use "Change sheet" in the header to switch spreadsheets.
    ════════════════════════════════════════════════════════════════════════ */
 var GOOGLE_CLIENT_ID    = 'REPLACE_WITH_OAUTH_CLIENT_ID';
-var SHEET_ID            = 'REPLACE_WITH_SPREADSHEET_ID';
+var GOOGLE_API_KEY      = 'REPLACE_WITH_API_KEY';
 var SHEET_PUBLISHED_ID  = '2PACX-1vS-s3m8pLsJvLN-NaLFS8a6fWIzk2Pm2m7-RQJK7obDmgtYKPLI6EnsrpBlQz6meJf0RES80I2vbz7R';
 var STAGING_GID         = '1658448723';
 
@@ -661,7 +685,8 @@ function initGoogleAuth() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: [
-      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/drive.readonly',
       'https://www.googleapis.com/auth/userinfo.profile'
     ].join(' '),
     callback: function(response) {
@@ -700,6 +725,7 @@ function signOut() {
   }
   accessToken = '';
   sessionStorage.removeItem('apbai_gtoken');
+  sessionStorage.removeItem('apbai_sheet_id');
   setAuthUI(false, '');
 }
 
@@ -718,7 +744,13 @@ function fetchUserInfo(token) {
     return res.json();
   })
   .then(function(data) {
-    if (data && data.name) setAuthUI(true, data.name);
+    if (data && data.name) {
+      setAuthUI(true, data.name);
+      /* Open Picker on first sign-in; skip if sheet already chosen */
+      if (!sessionStorage.getItem('apbai_sheet_id')) {
+        openPicker();
+      }
+    }
   })
   .catch(function() {
     sessionStorage.removeItem('apbai_gtoken');
@@ -730,6 +762,44 @@ function setAuthUI(signedIn, name) {
   document.getElementById('authSignedOut').style.display = signedIn ? 'none' : 'flex';
   document.getElementById('authSignedIn').style.display  = signedIn ? 'flex' : 'none';
   if (signedIn) document.getElementById('authUserName').textContent = name;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   GOOGLE PICKER
+   ════════════════════════════════════════════════════════════════════════ */
+function getSheetId() {
+  return sessionStorage.getItem('apbai_sheet_id') || '';
+}
+
+function openPicker() {
+  if (typeof gapi === 'undefined') {
+    alert('Google API client is still loading. Please wait a moment and try again.');
+    return;
+  }
+  gapi.load('picker', function() {
+    var view = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS)
+      .setIncludeFolders(true);
+    var picker = new google.picker.PickerBuilder()
+      .setTitle('Select the APBAI Pipeline Workbook')
+      .addView(view)
+      .setOAuthToken(accessToken)
+      .setDeveloperKey(GOOGLE_API_KEY)
+      .setCallback(onPickerPicked)
+      .build();
+    picker.setVisible(true);
+  });
+}
+
+function onPickerPicked(data) {
+  if (data[google.picker.Response.ACTION] === google.picker.Action.PICKED) {
+    var file = data[google.picker.Response.DOCUMENTS][0];
+    sessionStorage.setItem('apbai_sheet_id', file[google.picker.Document.ID]);
+  }
+}
+
+function changeSheet() {
+  sessionStorage.removeItem('apbai_sheet_id');
+  openPicker();
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -959,6 +1029,11 @@ function doApprove(id) {
     return;
   }
 
+  if (!getSheetId()) {
+    showCardError(id, 'No spreadsheet selected. Click "Change sheet" in the header to pick the target workbook.');
+    return;
+  }
+
   setCardLoading(id, true);
   clearCardError(id);
 
@@ -1027,7 +1102,7 @@ function appendToSheet(row) {
 
   var range = encodeURIComponent(EVENTS_TAB);
   var url   = 'https://sheets.googleapis.com/v4/spreadsheets/' +
-              SHEET_ID + '/values/' + range + ':append' +
+              getSheetId() + '/values/' + range + ':append' +
               '?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
 
   return fetch(url, {
